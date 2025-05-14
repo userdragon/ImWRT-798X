@@ -349,7 +349,9 @@ jobs:
         if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success'
         run: |
           set -e
-          echo "RELEASE_TAG=ImmortalWrt-24.10-${{ matrix.device_model }}-${{ env.FIRMWARE_VERSION }}" >> $GITHUB_OUTPUT
+          # 使用时间戳生成唯一的 Release Tag
+          TIMESTAMP=$(date +%s)
+          echo "RELEASE_TAG=ImmortalWrt-24.10-${{ matrix.device_model }}-${{ env.FIRMWARE_VERSION }}-${TIMESTAMP}" >> $GITHUB_OUTPUT
           cat << EOF > release.txt
           
           **固件版本**: ImmortalWrt ${{ env.FIRMWARE_VERSION }}  
@@ -370,7 +372,7 @@ jobs:
           files: |
             ${{ env.FIRMWARE }}/*sysupgrade.bin
             ${{ env.FIRMWARE }}/*factory.bin
-          overwrite: true
+          # 移除不支持的 overwrite 参数
 
       - name: 检查 WebDAV 凭证
         if: steps.compile.outputs.status == 'success' && env.WEBDAV_URL && env.WEBDAV_USERNAME && env.WEBDAV_PASSWORD
@@ -399,24 +401,3 @@ jobs:
             echo "上传成功: $(basename "$FILE")"
           done
           echo "所有文件上传完成。"
-
-      - name: 清理旧 Releases
-        if: steps.tag.outputs.status == 'success'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RELEASES=$(gh release list --repo ${{ github.repository }} --limit 100 --json name --jq '.[] | select(.name | test("ImmortalWrt-24.10-${{ matrix.device_model }}")) | .name' | tail -n +21)
-          if [ -n "$RELEASES" ]; then
-            for RELEASE in $RELEASES; do
-              gh release delete "$RELEASE" --yes || { echo "删除 Release $RELEASE 失败"; exit 1; }
-            done
-          else
-            echo "无需清理旧 Releases"
-          fi
-
-      - name: 清理旧工作流运行
-        if: steps.tag.outputs.status == 'success'
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          retain_days: 1
-          keep_minimum_runs: 20
